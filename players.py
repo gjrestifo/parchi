@@ -10,6 +10,7 @@ class Player:
         self.moveable_tokens = moveable_tokens
 
     def turn(self, dice):
+        print("It is now "+self.color+"'s turn")
         self.check_tokens()
         # roll dice
         roll = dice.roll()

@@ -108,6 +108,7 @@ generate_board(filename, space_list)
 generate_start_spaces()
 start_game(2)
 generate_home_tracks(player_list)
+player_list[0].your_turn = True
 # space_list[13].has_wall = True
 
 while running:
@@ -126,9 +127,15 @@ while running:
     
     p1 = player_list[0]
     # p1.token_list[0].start_token(space_list[1])
-    if event.type == pg.KEYDOWN:
-        pg.event.clear(pg.KEYDOWN)
-        p1.turn(d)
+    for i in range(len(player_list)):
+        if player_list[i].your_turn:
+            player_list[i].turn(d)
+            player_list[i].your_turn = False
+            player_list[(i+1) % len(player_list)].your_turn = True
+
+    # if event.type == pg.KEYDOWN:
+    #     pg.event.clear(pg.KEYDOWN)
+    #     p1.turn(d)
 
     # Update display
     pg.display.flip()
