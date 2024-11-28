@@ -72,7 +72,7 @@ class Dice(pygame.sprite.Sprite):
         self.screen = screen
     def roll(self):
         self.rolling_animation()
-        x = random.randint(1,6)
+        x = random.randint(5,6)
         self.image = self.faces[x-1]
         self.draw()
         self.screen.blit(self.image, (self.x, self.y))

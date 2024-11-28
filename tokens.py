@@ -1,7 +1,7 @@
 import pygame as pg
 import time
 class Token(pg.sprite.Sprite):
-    def __init__(self, color, x=0, y=0, start_space=None, spaces_moved=0, space_occupied=None, is_safe=False, home=False, screen=None, home_track={}, draw=None) -> None:
+    def __init__(self, color, x=0, y=0, start_space=None, spaces_moved=0, space_occupied=None, is_safe=False, is_home=False, screen=None, home_track={}, draw=None) -> None:
         """Creates a token object
 
         Args:
@@ -16,6 +16,7 @@ class Token(pg.sprite.Sprite):
         self.color = color
         self.x = x
         self.y = y
+        self.xi, self.yi = x, y
         self.image = pg.image.load(color+".png").convert_alpha()
         self.image = pg.transform.smoothscale(self.image, (40,40))
         # self.id = id Implement later
@@ -23,10 +24,14 @@ class Token(pg.sprite.Sprite):
         self.spaces_moved = 0
         self.space_occupied = None  # Could also be 0 if using index
         self.is_safe = False
-        self.has_reached_home = False
+        self.is_home = False
+        self.in_home_path = False
         self.screen=screen
         self.home_track = home_track
         self.draw = draw
+        self.got_capture = False
+
+
     def can_move(self, roll):
         """Checks if a token can make a valid move
         Two cases where moves are not possible:
@@ -57,6 +62,7 @@ class Token(pg.sprite.Sprite):
         """
         self.spaces_moved = 1
         self.space_occupied = self.start_space
+        self.space_occupied.tokens.append(self)
         self.x, self.y = self.space_occupied.x, self.space_occupied.y
         self.is_safe = True
     
@@ -67,17 +73,24 @@ class Token(pg.sprite.Sprite):
             steps (_type_): _description_
         """
         # self.spaces_moved += steps
+        self.space_occupied.tokens.remove(self)
         for i in range(steps):
             self.draw(self)
             self.update_position(1)
             self.screen.blit(self.image, (self.x, self.y))
             pg.display.flip()
             time.sleep(.2)
-            
-        # self.check_safe()
-        # self.check_home()
+        self.space_occupied.tokens.append(self)
+        self.check_capture()
+        self.check_safe()
+        self.check_home()
 
     def update_position(self, steps):
+        """_summary_
+
+        Args:
+            steps (_type_): _description_
+        """
         self.spaces_moved += steps
         print(self.color)
         print("Spaces moved:",self.spaces_moved)
@@ -86,7 +99,6 @@ class Token(pg.sprite.Sprite):
             self.space_occupied = None
         elif self.spaces_moved <= 64:
             # Token is on the main track
-            main_track_position = self.spaces_moved % 64  # Adjust for 0-indexing
             for i in range(steps):
                 self.space_occupied = self.space_occupied.next
                 # TODO: Check walls each step
@@ -94,17 +106,16 @@ class Token(pg.sprite.Sprite):
                 self.y = self.space_occupied.y
         elif self.spaces_moved <= 72:  # Spaces 64 to 72 are the home path
             # Token is on the home path specific to its color
-            # home_path_position = self.spaces_moved - 63
             self.space_occupied = self.home_track[self.spaces_moved]
             print("Home Track:", self.color, self.home_track[self.spaces_moved].x, self.home_track[self.spaces_moved].y)
             self.x = self.space_occupied.x
             self.y = self.space_occupied.y
-            print(self.x, self.y)
-            # print(self.space_occupied)
-        else:
-            # Token has reached home
-            self.space_occupied = "home"
-            self.has_reached_home = True
+            if self.spaces_moved == 72:
+                # Token has reached home
+                print("You reached home!")
+                self.space_occupied = "home"
+                # TODO: Find better way of representing home space for line 131 in tokens.py
+                self.is_home = True
 
     def is_clicked(self):
         if any(pg.mouse.get_pressed()):
@@ -115,34 +126,43 @@ class Token(pg.sprite.Sprite):
             pg.event.clear()
 
             return max(dx,dy) < 35
-        # dx = abs(self.x - x)   
-        # dy = abs(self.y - y)
-        # return max(dx,dy) < 35
+        
+    def check_safe(self):
+        """Checks to see if a token occupys a safe space and updates the is_safe attribute.
+        """
+        # safe_spaces = [5,12,17,22,29,34,39,46,51,56,63,68]
+        if self.is_home or self.space_occupied.is_safe:
+            self.is_safe = True
+        else:
+            self.is_safe = False
 
-        # Update safe space status
-        # self.check_safe()
-    # def check_safe(self):
-    #     """_summary_
-    #     """
-    #     safe_spaces = [5,12,17,22,29,34,39,46,51,56,63,68]
-    #     if self.space_occupied.value in safe_spaces:
-    #         self.is_safe = True
-    #     else:
-    #         self.is_safe = False
+    def check_home(self):
+        """ Checks to see if the token has made it into the home path
+        """
+        # Update home status if the token has reached the final destination
+        if self.spaces_moved >= 64:
+            self.in_home_path = True
 
-    # def check_home(self):
-    #         # Update home status if the token has reached the final destination
-    #         if self.spaces_moved >= 68:
-    #             self.has_reached_home = True
+    def reset(self):
+        """Resets a token to its original position. This function is called in the event that a token is captured or a player rolls three sixes in a row.
+        """
+        # Reset token's attributes to initial state
+        self.spaces_moved = 0
+        self.space_occupied = None
+        self.is_safe = False
+        self.in_home_path = False
+        self.x, self.y = self.xi, self.yi
 
-    # def reset(self):
-    #         # Reset token's attributes to initial state
-    #         self.spaces_moved = 0
-    #         self.space_occupied = None
-    #         self.is_safe = False
-    #         self.has_reached_home = False
+    def check_capture(self):
+            # Determine if this token can capture another token
+            if len(self.space_occupied.tokens) == 2:
+                other_token = self.space_occupied.tokens[0]
+                if not other_token.is_safe and self.color != other_token.color:
+                    self.space_occupied.tokens.remove(other_token)
+                    other_token.reset()
+                    self.got_capture = True
+                else:
+                    self.space_occupied.build_wall()
 
-    # def can_capture(self, other_token):
-    #         # Determine if this token can capture another token
-    #         return (self.space_occupied == other_token.space_occupied and 
-    #                 not self.is_safe and not other_token.is_safe)
+            # if (self.space_occupied == other_token.space_occupied and 
+            #         not self.is_safe and not other_token.is_safe)
